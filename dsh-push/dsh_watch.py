@@ -2,6 +2,9 @@
 """
 DSH session state watcher — precise event-stream folding.
 
+MIRROR COPY: the canonical dsh_watch lives in the deepseek-whale-pet repository
+(root-level dsh_watch.py). Change it there first, then mirror the change here.
+
 Data sources:
   1. ~/.dsh/sessions/<workspace>/<session-id>/session.jsonl.zstd
      DSH's session event log (zstd-compressed JSONL, appended line by line),

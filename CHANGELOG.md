@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-08-15
+
+### Changed
+
+- Adopt the phone push helper as the maintained home of `dsh-push` (previously
+  shared with the deepseek-whale-pet repository, which now points here).
+- Add `dsh-push/README.md` with the full setup guide, privacy notes, and the
+  relationship to the pet repository.
+- Mark `dsh-push/dsh_watch.py` as a mirror of the canonical copy in the
+  deepseek-whale-pet repository.
+
+## [1.0.3] - 2026-08-15
+
+### Changed
+
+- Mark expired approvals in the admin panel with a red "(expired)" badge and an
+  explanation line.
+- Fix stale troubleshooting entries in the install guide (the "bound to another
+  browser" page no longer exists; document same-IP re-claim and 90-day expiry).
+
+## [1.0.2] - 2026-08-15
+
 ### Fixed
 
 - Replace the PWA service worker with a pure network pass-through version
