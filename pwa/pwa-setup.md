@@ -13,7 +13,7 @@ that `dist`, so re-apply these steps after every upgrade.**
 | `icon-512.png` | 512×512 PNG icon (`any` and `maskable` purpose). |
 | `icon-512.svg` | SVG icon fallback. |
 | `manifest.webmanifest` | Web app manifest (name, icons, display mode, scope). |
-| `sw.js` | Service worker for warm PWA starts (cache strategy for static assets). |
+| `sw.js` | Service worker that only clears legacy caches on activation, then passes every request straight to the network (no caching). This is deliberate: asset caching mixes stale builds with DSH's module rev mechanism and causes broken page states. |
 
 ## Steps
 

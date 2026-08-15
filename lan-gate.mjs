@@ -198,16 +198,6 @@ function deniedPage(ip) {
     + '<script>setTimeout(function(){location.reload()},4000)</script>')
 }
 
-function boundPage(ip) {
-  return gatePage('Re-authorization required · DSH LAN Access',
-    '<div class="logo">DSH</div>'
-    + '<h1>This device\'s access token is bound to another browser</h1>'
-    + '<p class="sub">For security, one approval binds a single browser</p>'
-    + '<p class="bad">Device ' + ip + ' already has its token issued to another browser.</p>'
-    + '<p>To use this browser, revoke the device in "Settings → LAN Access" on this machine, then approve it again.</p>'
-    + '<a class="btn" href="javascript:location.reload()">Check again</a>')
-}
-
 function rateLimitPage(ip) {
   return gatePage('Too many requests · DSH LAN Access',
     '<div class="logo">DSH</div>'

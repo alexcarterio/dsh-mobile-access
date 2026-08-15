@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Replace the PWA service worker with a pure network pass-through version
+  (clears legacy caches on activation, intercepts nothing). The previous
+  cache-first strategy mixed stale assets with DSH's module rev mechanism and
+  caused broken page states.
+- Remove the dead `boundPage` gate page replaced by same-IP re-claim.
+
 ## [1.0.1] - 2026-08-15
 
 ### Security
