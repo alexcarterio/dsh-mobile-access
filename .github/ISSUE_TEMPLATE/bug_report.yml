@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a problem so it can be fixed
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected to happen instead.
+      placeholder: Phone access shows 429 or the approval page never appears...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps that trigger the problem.
+      placeholder: |
+        1. Install the plugin and restart DSH
+        2. Open http://<lan-ip>:3088 from the phone
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: DSH version, Node version, and OS.
+      placeholder: DSH 0.1.0-rc.6, Node 20, Windows 11
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any relevant log lines or error messages (remove personal data first).
+      render: shell

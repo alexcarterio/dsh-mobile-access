@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax-check the plugin and service worker
+        run: |
+          node --check lan-gate.mjs
+          node --check pwa/sw.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile-check Python helpers
+        run: |
+          python -m py_compile dsh-push/dsh_push.py dsh-push/dsh_watch.py tools/parse_file.py
+      - name: Validate the cordis patch example
+        run: |
+          pip install pyyaml
+          python -c "import yaml; yaml.safe_load(open('cordis.patch.yml.example', encoding='utf-8')); print('yaml ok')"

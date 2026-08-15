@@ -1,5 +1,9 @@
 # dsh-mobile-access
 
+[![CI](https://github.com/alexcarterio/dsh-mobile-access/actions/workflows/ci.yml/badge.svg)](https://github.com/alexcarterio/dsh-mobile-access/actions/workflows/ci.yml)
+
+![Architecture: phone -> lan-gate -> DSH web, plus the ntfy push path](assets/architecture.png)
+
 Everything you need to use DeepSeek Harness (DSH) from your phone: a secure LAN
 gate plugin with device approval, a mobile-friendly layout, phone push
 notifications, and PWA installation assets.
