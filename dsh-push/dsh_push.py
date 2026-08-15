@@ -118,11 +118,16 @@ def main():
 
 def acquire_single_instance():
     """Single-instance lock: failing to bind a fixed port means an instance is
-    already running (the daemon retries every minute)."""
+    already running (the daemon retries every minute).
+
+    Never set SO_REUSEADDR here: on Windows it allows port-hijack binding, so
+    every new process binds successfully (the lock never fires) and duplicate
+    watchers push the same event repeatedly. Without it the second bind raises
+    OSError (WSAEADDRINUSE) and the lock works.
+    """
     import socket
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", 27999))
         s.listen(1)
         return s
