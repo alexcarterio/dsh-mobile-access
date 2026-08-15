@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README phone-setup section restructured: platform guide table up front,
   desktop-side steps (Tailscale, Serve, ntfy) after it.
 
+### Fixed
+
+- Message duplication: the PROXY-protocol parser no longer unshifts
+  non-PROXY bytes back into the socket stream (the HTTP parser already received
+  them, so unshifting made every request parse and forward twice).
+- Double panel injection: `injectPanel` is guarded by a global
+  `Symbol.for('dsh.lan-gate.applied')` flag.
+- ntfy delivery breaking when a local proxy (e.g. Clash) is off: `dsh_push`
+  now bypasses proxies (`proxies={"http": None, "https": None}`).
+
+### Changed
+
+- Add a forwarding log (`~/.dsh/lan-gate/forward.log`) for prompt submissions
+  and non-2xx/3xx responses; the claim ticket in the query string is redacted.
+
 ## [1.0.5] - 2026-08-15
 
 ### Changed

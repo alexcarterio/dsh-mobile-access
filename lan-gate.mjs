@@ -228,8 +228,26 @@ function injectDeviceAttr(html, kind) {
   return html.slice(0, m.index) + m[0] + ' data-lan-device="' + kind + '"' + html.slice(m.index + m[0].length)
 }
 
+// Forwarding log for prompt submissions and non-2xx/3xx responses (troubleshooting).
+const FORWARD_LOG = path.join(dshHome(), 'lan-gate', 'forward.log')
+
+function forwardLog(req, bodyBytes, status) {
+  try {
+    const cl = String(req.headers['content-length'] || '-')
+    const ip = String(req.socket && req.socket.remoteAddress || '-')
+    // Never log the claim ticket that may ride in the query string.
+    const safeUrl = String(req.url || '-').replace(/([?&])t=[^&]*/g, '$1t=***')
+    const line = new Date().toISOString() + ' ' + ip + ' ' + req.method + ' ' + safeUrl + ' cl=' + cl + ' got=' + bodyBytes + ' -> ' + status
+    fs.appendFileSync(FORWARD_LOG, line + '\n')
+  } catch (_err) {
+    // Logging failure must not affect forwarding
+  }
+}
+
 function forwardRequest(decisions, req, res, clientIp) {
   const headers = cleanHeaders(req.headers, clientIp)
+  let bodyBytes = 0
+  req.on('data', (chunk) => { bodyBytes += chunk.length })
   const upstream = http.request({
     host: TARGET_HOST,
     port: TARGET_PORT,
@@ -240,6 +258,10 @@ function forwardRequest(decisions, req, res, clientIp) {
     // force-refreshed/aborted causes cross-wired responses (rpcId mismatch).
     agent: false,
   }, (upRes) => {
+    const upStatus = upRes.statusCode || 0
+    const pathname = String(req.url || '').split('?')[0]
+    const isPrompt = req.method === 'POST' && /\/api\/(session|subagents)\.(prompt|updateQueue)$/.test(pathname)
+    if (isPrompt || upStatus < 200 || upStatus >= 300) forwardLog(req, bodyBytes, upStatus)
     const outHeaders = {}
     for (const key of Object.keys(upRes.headers)) outHeaders[key] = upRes.headers[key]
     // Close the connection when the response ends: disable connection reuse at
@@ -516,7 +538,14 @@ const PANEL_JS = '<scr' + 'ipt>'
   + '})()'
   + '</scr' + 'ipt>'
 
+// Global guard against double injection: when the panel script is embedded
+// more than once (e.g. both the host page and a proxied variant), only the
+// first application runs — the second would duplicate the admin panel.
+const LAN_GATE_APPLIED = Symbol.for('dsh.lan-gate.applied')
+
 function injectPanel(html) {
+  if (globalThis[LAN_GATE_APPLIED]) return html
+  globalThis[LAN_GATE_APPLIED] = true
   if (typeof html !== 'string' || html === '') return html
   const headOpen = html.search(/<head[^>]*>/i)
   if (headOpen < 0) return html
@@ -778,9 +807,11 @@ export function apply(ctx) {
         socket.unshift(buf.slice(total))
         return
       }
-      // Not PROXY protocol: push the bytes back unchanged and let the HTTP parser continue
+      // Not PROXY protocol: the bytes are already flowing through this socket,
+      // and the HTTP parser receives and parses them once on its own. Never
+      // unshift them back — that would make the parser see the same request
+      // twice and forward it twice (the message-duplication bug).
       socket.removeListener('data', onData)
-      socket.unshift(buf)
     }
     socket.on('data', onData)
   }

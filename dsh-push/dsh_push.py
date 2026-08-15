@@ -62,8 +62,11 @@ def push(title, message, priority=3, tags="", sound=None):
     if NTFY_TOKEN:
         headers["Authorization"] = "Bearer " + NTFY_TOKEN
     try:
+        # Bypass any system/local proxy (e.g. Clash): the watcher talks directly
+        # to the ntfy server, so a stopped proxy must not break push delivery.
         resp = requests.post(url, data=message.encode("utf-8"),
-                             headers=headers, timeout=10)
+                             headers=headers, timeout=10,
+                             proxies={"http": None, "https": None})
         return resp.status_code
     except Exception as e:
         log(f"push failed: {e}")
