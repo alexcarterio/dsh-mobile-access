@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Platform user guides: `docs/phone-guide-ios.md` and
+  `docs/phone-guide-android.md` (preparation, connection, PWA install, ntfy
+  push, troubleshooting, and security notes for each platform).
+- README phone-setup section restructured: platform guide table up front,
+  desktop-side steps (Tailscale, Serve, ntfy) after it.
+
+## [1.0.5] - 2026-08-15
+
 ### Changed
 
 - Fully decouple from the desktop pet repository: remove all cross-repository

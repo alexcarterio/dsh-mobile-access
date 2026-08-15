@@ -120,7 +120,17 @@ pip install python-docx pypdf py7zr rarfile
 
 ## Phone setup
 
-### 1. Join a tailnet (Tailscale)
+**On the phone, follow the platform guide:**
+
+| Platform | Guide |
+|---|---|
+| 📱 Android | [`docs/phone-guide-android.md`](docs/phone-guide-android.md) — Tailscale, entry addresses, PWA install, ntfy, troubleshooting |
+| 🍎 iPhone / iPad | [`docs/phone-guide-ios.md`](docs/phone-guide-ios.md) — same steps, with the iOS home-screen and notification specifics |
+
+The full administrator-side manual (architecture, firewall, maintenance,
+upgrade) lives in [`docs/install-guide.md`](docs/install-guide.md).
+
+### 1. Desktop side: join a tailnet (Tailscale)
 
 1. Install Tailscale on the desktop and on the phone.
 2. Log both devices into the **same** Tailscale account.
@@ -132,19 +142,10 @@ Find the desktop's Tailscale IP with:
 tailscale ip -4
 ```
 
-### 2. Open over the tunnel
+### 2. Desktop side: HTTPS via Tailscale Serve (recommended)
 
-On the phone (with Tailscale connected), browse to:
-
-```text
-http://<machine-tailscale-ip>:3088
-```
-
-Approve the phone in **Settings → LAN Access** with access mode **Phone**.
-
-### 3. (Recommended) HTTPS via Tailscale Serve
-
-`tailscale serve` provides a valid TLS certificate so Chrome offers the "Install app" (PWA) flow:
+`tailscale serve` provides a valid TLS certificate so the phone browser offers
+the "Install app" (PWA) flow:
 
 ```text
 tailscale serve --bg --yes --https=3443 http://127.0.0.1:3088
@@ -155,11 +156,10 @@ Then open `https://<your-device>.your-tailnet.ts.net:3443` on the phone.
 - Inspect: `tailscale serve status`
 - Remove: `tailscale serve reset`
 
-### 4. Install as a PWA
+The PWA icon/manifest/service-worker assets for the DSH frontend are documented
+in [`pwa/pwa-setup.md`](pwa/pwa-setup.md).
 
-With the HTTPS address open in Chrome, use **⋮ → Install app / Add to Home screen**. See [`pwa/pwa-setup.md`](pwa/pwa-setup.md) for how the icon/manifest/service-worker assets are applied to the DSH frontend.
-
-### 5. Phone notifications (ntfy)
+### 3. Desktop side: phone notifications (ntfy)
 
 `dsh-push` forwards DSH events to your phone via ntfy. See
 [`dsh-push/README.md`](dsh-push/README.md) for the full guide, privacy notes,
