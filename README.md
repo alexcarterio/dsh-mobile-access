@@ -18,7 +18,7 @@ that forwards DSH session events to your phone over
 
 - **Device approval flow** — a new device sees a "waiting for approval" gate page and cannot reach DSH until you approve it from the desktop.
 - **Per-device access mode** — each approved device can be set to `auto`, `phone`, or `desktop`. Phone mode injects a compact layout; desktop mode keeps the desktop layout even in a narrow window.
-- **Token + cookie binding** — one approval issues a 128-bit random token that is claimed once and bound to a single browser via an `HttpOnly`/`SameSite=Lax` cookie. Revoking a device drops its access immediately.
+- **Token + cookie binding** — one approval issues a 128-bit random token, issued once via an `HttpOnly`/`SameSite=Lax` cookie (the `Secure` flag is added on the HTTPS/Tailscale Serve entry). Tokens expire after 90 days, and a browser on the same IP automatically re-claims instead of getting stuck on a "bound to another browser" page. Revoking a device drops its access immediately.
 - **Rate limiting** — per-IP sliding-window limit (default 3000 requests/minute, raised from the upstream 120), returning `429` on overflow to blunt scanners and brute-force attempts.
 - **Mobile layout** — compact phone CSS, full-screen dialogs, non-obscuring model/context menus, iOS focus-zoom prevention, and a `crypto.randomUUID` polyfill for non-HTTPS intranet contexts.
 - **Attachment upload** — `POST /lan-gate/upload` accepts files up to 20 MB, saved under `$DSH_HOME/uploads/` with a 7-day automatic cleanup. A companion script [`tools/parse_file.py`](tools/parse_file.py) converts common attachment formats (txt/docx/pdf/zip/7z/rar) to readable text.
@@ -31,8 +31,9 @@ that forwards DSH session events to your phone over
 The plugin is designed to run only on trusted networks. It does **not** provide end-to-end HTTPS and must **never** be exposed directly to the public internet.
 
 1. **Network layer (firewall)** — allow inbound traffic to the gate port (`3088` by default) only from your LAN or your Tailscale subnet (`100.64.0.0/10`). Everything else stays unreachable.
-2. **Application layer (approval + token)** — every new device must be approved on the desktop, then receives a one-time, single-browser-bound token. Revocation cuts the connection.
-3. **Host process** — the DSH web server itself stays bound to `127.0.0.1:3080`; only the in-process gate proxy forwards to it. The local-only control routes (`/lan-gate/status`, `/lan-gate/action`, `/lan-gate/upload`) reject non-local requests by checking `x-forwarded-for`.
+2. **Application layer (approval + token)** — every new device must be approved on the desktop, then receives a one-time token issued via a single-browser-bound cookie. Tokens expire after 90 days, and a same-IP device automatically re-claims instead of being stuck. Revocation cuts the connection.
+3. **Host process** — the DSH web server itself stays bound to `127.0.0.1:3080`; only the in-process gate proxy forwards to it. The local-only control routes (`/lan-gate/status`, `/lan-gate/action`, `/lan-gate/upload`) reject non-local requests by checking `x-forwarded-for` and additionally enforce an `Origin` allow-list (loopback / LAN IPs / `*.ts.net`) against CSRF.
+4. **Serve entry client IP resolution** — traffic arriving through `tailscale serve` (HTTPS entry) comes from loopback but carries the `tailscale-user-login` header and `x-forwarded-for`; the gate trusts that forwarded IP only on loopback + Serve-header requests, so per-device approval still applies to each tailnet device instead of collapsing them all into the local machine.
 
 > **Warning:** do not bind DSH itself to `0.0.0.0` and do not port-forward the gate port to the public internet. Use it only inside a trusted LAN or a Tailscale tailnet.
 
@@ -114,7 +115,7 @@ pip install python-docx pypdf py7zr rarfile
 | `LAN_GATE_HOST` | `0.0.0.0` | Listen address. Set to `127.0.0.1` when a reverse proxy/tunnel (e.g. `tailscale serve`) sits in front. |
 
 - **Rate limit** — hardcoded to `3000` requests/minute per IP (sliding window). It is intentionally not tunable via env; edit the `RATE_LIMIT_PER_MIN` constant in `lan-gate.mjs` if you must, then restart DSH.
-- **Approval state** — persisted at `$DSH_HOME/lan-gate-state.json`. Delete it to reset all approvals.
+- **Approval state** — persisted at `$DSH_HOME/lan-gate-state.json`. Approvals expire after 90 days (`TOKEN_TTL_MS`); delete the file to reset all approvals immediately.
 - **Uploads** — stored at `$DSH_HOME/uploads/`, auto-cleaned after 7 days.
 
 ## Phone setup

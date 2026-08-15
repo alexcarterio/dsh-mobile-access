@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-15
+
+### Security
+
+- Resolve the real client IP for Tailscale Serve entries: trust `x-forwarded-for`
+  only when the connection comes from loopback and carries the
+  `tailscale-user-login` header, so per-device approval applies to each tailnet
+  device instead of collapsing them all into the local machine.
+- Strip forwarded headers (`x-forwarded-host`, `x-forwarded-proto`, `x-real-ip`,
+  `forwarded`) before proxying.
+- Add an `Origin` allow-list check (loopback / LAN IPs / `*.ts.net`) on the
+  control routes (`/lan-gate/status`, `/lan-gate/action`, `/lan-gate/upload`).
+- Add a 90-day token TTL (`TOKEN_TTL_MS`); expired approvals fall back to the
+  "awaiting approval" gate.
+
+### Fixed
+
+- Fix the approval claim loop: the claim branch now precedes auto re-claim,
+  preventing an infinite redirect.
+- Strip the replayed HTTP request bytes at the start of an upgraded WebSocket
+  stream (Tailscale Serve reverse proxy behavior).
+- Set the `Secure` flag on the token cookie for Serve (HTTPS) requests.
+- Close the connection after each response and disable upstream keep-alive
+  reuse to eliminate cross-wired responses.
+
 ## [1.0.0] - 2026-08-15
 
 ### Added

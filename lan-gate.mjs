@@ -84,15 +84,20 @@ function isLoopbackIp(ip) {
   return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost'
 }
 
+// Approval token validity: 90 days. After expiry the device falls back to
+// "awaiting approval" and must be allowed again on this machine.
+const TOKEN_TTL_MS = 90 * 24 * 3600 * 1000
+
 function deviceKind(decisions, ip) {
+  if (!isAllowed(decisions, ip)) return undefined
   const d = decisions[ip]
-  if (!d || d.allow !== true || d.revoked === true) return undefined
   return d.kind === 'phone' || d.kind === 'desktop' ? d.kind : undefined
 }
 
 function isAllowed(decisions, ip) {
   const d = decisions[ip]
-  return d !== undefined && d.allow === true && d.revoked !== true
+  if (d === undefined || d.allow !== true || d.revoked === true) return false
+  return Date.now() - (d.at || 0) < TOKEN_TTL_MS
 }
 
 function randomToken() {
@@ -174,6 +179,9 @@ function pendingPage(ip) {
     + '<div class="spinner"></div>'
     + '<p>Device</p><span class="ip">' + ip + '</span>'
     + '<p>Approve this device from the DSH UI on the desktop:<br>Settings → LAN Access → Allow</p>'
+    + '<p style="font-size:12px;color:#8b93a3">⚠️ After approval this device gains full control over DSH on this machine'
+    + ' (command execution, file read/write, approval actions). Approve only your own devices;'
+    + ' prefer the HTTPS (Tailscale) entry and avoid plaintext direct addresses on public networks.</p>'
     + '<a class="btn" href="javascript:location.reload()">Check now</a>'
     + '<div class="bar"><i></i></div>'
     + '<script>setTimeout(function(){location.reload()},2500)</script>')
@@ -213,7 +221,7 @@ function rateLimitPage(ip) {
 // ---- reverse proxy (in-process, with Host rewrite and device-attribute injection) ----
 
 function cleanHeaders(headers, clientIp) {
-  const drop = { host: 1, origin: 1, connection: 1, 'proxy-connection': 1, 'keep-alive': 1, te: 1, trailer: 1, 'transfer-encoding': 1, upgrade: 1, 'proxy-authorization': 1, 'proxy-authenticate': 1 }
+  const drop = { host: 1, origin: 1, connection: 1, 'proxy-connection': 1, 'keep-alive': 1, te: 1, trailer: 1, 'transfer-encoding': 1, upgrade: 1, 'proxy-authorization': 1, 'proxy-authenticate': 1, 'x-forwarded-host': 1, 'x-forwarded-proto': 1, 'x-real-ip': 1, forwarded: 1 }
   const out = {}
   for (const key of Object.keys(headers || {})) {
     if (drop[String(key).toLowerCase()]) continue
@@ -238,11 +246,20 @@ function forwardRequest(decisions, req, res, clientIp) {
     method: req.method,
     path: req.url,
     headers: headers,
+    // Do not reuse the keep-alive pool: reusing a connection while a request is
+    // force-refreshed/aborted causes cross-wired responses (rpcId mismatch).
+    agent: false,
   }, (upRes) => {
     const outHeaders = {}
     for (const key of Object.keys(upRes.headers)) outHeaders[key] = upRes.headers[key]
+    // Close the connection when the response ends: disable connection reuse at
+    // both the browser and Tailscale Serve layers, eliminating cross-wired responses.
+    outHeaders['connection'] = 'close'
     const contentType = String(outHeaders['content-type'] || '')
     const isHtml = contentType.indexOf('text/html') >= 0
+    // Disable caching for module bundles/JSON: after a restart the rev changes,
+    // preventing the browser from mixing old and new builds (module load failures).
+    if (contentType.indexOf('javascript') >= 0 || contentType.indexOf('json') >= 0) outHeaders['cache-control'] = 'no-store'
     if (isHtml) outHeaders['cache-control'] = 'no-store'
     const kind = deviceKind(decisions, clientIp)
     if (isHtml && kind !== undefined) {
@@ -539,12 +556,29 @@ function json(res, code, value) {
   res.end(JSON.stringify(value))
 }
 
+// ---- control-route hardening: Origin check (CSRF defense; non-browser requests without an Origin header pass) ----
+
+function isTrustedOrigin(req) {
+  const origin = req.headers['origin']
+  if (typeof origin !== 'string' || origin === '') return true
+  try {
+    const u = new URL(origin)
+    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') return true
+    if (lanIps().indexOf(u.hostname) >= 0) return true
+    if (u.hostname.endsWith('.ts.net')) return true
+    return false
+  } catch (_err) {
+    return false
+  }
+}
+
 // ---- attachment upload: POST /lan-gate/upload?name=<filename>, body is raw bytes ----
 // Files are saved to $DSH_HOME/uploads/<timestamp>-<safe-name>; 20MB per-file cap.
 const UPLOAD_MAX_BYTES = 20 * 1024 * 1024
 
 function uploadHandler(req, res) {
   if (!isLocalRequest(req)) { json(res, 403, { ok: false, reason: 'forbidden' }); return }
+  if (!isTrustedOrigin(req)) { json(res, 403, { ok: false, reason: 'bad-origin' }); return }
   if (req.method !== 'POST') { json(res, 405, { ok: false, reason: 'post-only' }); return }
   let rawName = 'file'
   try {
@@ -652,12 +686,16 @@ export function apply(ctx) {
 
   function statusHandler(req, res) {
     if (!isLocalRequest(req)) { json(res, 403, { ok: false, reason: 'forbidden' }); return }
+    if (!isTrustedOrigin(req)) { json(res, 403, { ok: false, reason: 'bad-origin' }); return }
     json(res, 200, buildStatus())
   }
 
   function actionHandler(req, res) {
     if (!isLocalRequest(req)) { json(res, 403, { ok: false, reason: 'forbidden' }); return }
+    if (!isTrustedOrigin(req)) { json(res, 403, { ok: false, reason: 'bad-origin' }); return }
     if (req.method !== 'POST') { json(res, 405, { ok: false, reason: 'post-only' }); return }
+    const contentType = String(req.headers['content-type'] || '')
+    if (contentType.indexOf('application/json') !== 0) { json(res, 415, { ok: false, reason: 'json-only' }); return }
     const chunks = []
     let size = 0
     req.on('data', (chunk) => {
@@ -697,11 +735,71 @@ export function apply(ctx) {
     return rate.count > RATE_LIMIT_PER_MIN
   }
 
+  // ---- real client IP resolution: Tailscale Serve (HTTPS entry) forwards
+  // requests from the local machine and adds x-forwarded-for (the real client IP)
+  // plus the tailscale-user-login identity header. Trust XFF only when the
+  // connection actually comes from loopback AND carries the Serve header, so a
+  // forged XFF on a direct external connection has no effect.
+  function isServeRequest(req) {
+    return req !== undefined && typeof req.headers['tailscale-user-login'] === 'string'
+  }
+
+  function clientIpFor(socket, req) {
+    const remote = normalizeIp(socket.remoteAddress)
+    if (socket.__proxiedIp && isLoopbackIp(remote)) return normalizeIp(socket.__proxiedIp)
+    if (isLoopbackIp(remote) && isServeRequest(req)) {
+      const xff = req.headers['x-forwarded-for']
+      if (typeof xff === 'string' && xff !== '') return normalizeIp(xff.split(',')[0].trim())
+    }
+    return remote
+  }
+
+  function attachProxyProtocolParser(socket) {
+    let buf = Buffer.alloc(0)
+    const onData = (chunk) => {
+      buf = Buffer.concat([buf, chunk])
+      if (buf.length >= 6 && buf.toString('ascii', 0, 6) === 'PROXY ') {
+        const idx = buf.indexOf('\r\n')
+        if (idx === -1) {
+          if (buf.length > 107) { try { socket.destroy() } catch (_err) { /* destroyed */ } }
+          return
+        }
+        const parts = buf.toString('ascii', 6, idx).split(' ')
+        if (parts.length >= 2) socket.__proxiedIp = parts[1]
+        socket.removeListener('data', onData)
+        socket.unshift(buf.slice(idx + 2))
+        return
+      }
+      if (buf.length >= 16 && buf[0] === 0x0d && buf[1] === 0x0a && buf[2] === 0x0d && buf[3] === 0x0a && buf[4] === 0x00 && buf[5] === 0x0d && buf[6] === 0x0a && buf[7] === 0x51 && buf[8] === 0x55 && buf[9] === 0x49 && buf[10] === 0x54 && buf[11] === 0x0a) {
+        const fam = buf[12] === 0x21 ? buf.readUInt8(13) : 0
+        const len = buf.readUInt16BE(14)
+        const total = 16 + len
+        if (buf.length < total) return
+        let ip = ''
+        if (fam === 0x11) {
+          ip = buf[16] + '.' + buf[17] + '.' + buf[18] + '.' + buf[19]
+        } else if (fam === 0x21) {
+          const parts6 = []
+          for (let k = 0; k < 8; k++) parts6.push(buf.readUInt16BE(16 + k * 2).toString(16))
+          ip = parts6.join(':')
+        }
+        if (ip !== '') socket.__proxiedIp = ip
+        socket.removeListener('data', onData)
+        socket.unshift(buf.slice(total))
+        return
+      }
+      // Not PROXY protocol: push the bytes back unchanged and let the HTTP parser continue
+      socket.removeListener('data', onData)
+      socket.unshift(buf)
+    }
+    socket.on('data', onData)
+  }
+
   function startProxy() {
     if (server || userStopped) return
     starting = true
     const proxy = http.createServer((req, res) => {
-      const ip = normalizeIp(req.socket.remoteAddress)
+      const ip = clientIpFor(req.socket, req)
       if (overRate(ip)) {
         res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '60' })
         res.end(rateLimitPage(ip))
@@ -712,22 +810,30 @@ export function apply(ctx) {
         return
       }
       const d = decisions[ip]
-      if (d && d.allow === true && d.revoked !== true) {
+      if (isAllowed(decisions, ip)) {
         if (!d.token) { d.token = randomToken(); d.issued = false; save() }
         if (parseCookies(req).lg_token === d.token) {
           forwardRequest(decisions, req, res, ip)
           return
         }
-        if (d.issued === true) {
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-          res.end(boundPage(ip))
-          return
-        }
+        // The claim branch must precede "auto re-claim": /?t=token must be
+        // claimed first, otherwise the claim request itself gets redirected back
+        // to /?t=token, forming an infinite redirect loop.
         if (queryTicket(req.url) === d.token) {
           d.issued = true
           save()
-          setTokenCookie(res, d.token, false)
+          setTokenCookie(res, d.token, isServeRequest(req))
           res.writeHead(302, { Location: '/', 'Cache-Control': 'no-store' })
+          res.end('')
+          return
+        }
+        // Cookie self-heal: a browser on the same IP (same device) automatically
+        // re-runs the claim redirect even if its cookie was cleared, or it
+        // previously claimed through the other entry (3088/3443), instead of
+        // getting stuck on the "bound to another browser" page. The token is
+        // still only issued to the browser that follows the claim redirect.
+        if (d.issued === true) {
+          res.writeHead(302, { Location: '/?t=' + encodeURIComponent(d.token), 'Cache-Control': 'no-store' })
           res.end('')
           return
         }
@@ -744,15 +850,18 @@ export function apply(ctx) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
       res.end(pendingPage(ip))
     })
+    proxy.on('connection', (socket) => {
+      attachProxyProtocolParser(socket)
+    })
     proxy.on('upgrade', (req, socket, head) => {
-      const ip = normalizeIp(socket.remoteAddress)
+      const ip = clientIpFor(socket, req)
       if (overRate(ip)) {
         try { socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n') } catch (_err) { /* closed */ }
         return
       }
       const d = decisions[ip]
       const ok = isLoopbackIp(ip) || lanIps().indexOf(ip) >= 0
-        || (d !== undefined && d.allow === true && d.revoked !== true && d.token !== undefined && parseCookies(req).lg_token === d.token)
+        || (isAllowed(decisions, ip) && d !== undefined && d.token !== undefined && parseCookies(req).lg_token === d.token)
       if (!ok) {
         try { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n') } catch (_err) { /* closed */ }
         return
@@ -787,8 +896,38 @@ export function apply(ctx) {
         upstream.on('close', kill)
         try { upstream.write(raw) } catch (_err) { /* closed */ }
         if (head && head.length > 0) { try { upstream.write(head) } catch (_err) { /* closed */ } }
-        socket.pipe(upstream)
-        upstream.pipe(socket)
+        // Client direction: Serve (Go ReverseProxy) replays the HTTP request at
+        // the start of the upgraded stream; when a block starting with an HTTP
+        // method is detected, strip up to \r\n\r\n and forward only real WS frames.
+        let clBuf = Buffer.alloc(0)
+        let clStripped = false
+        socket.on('data', (chunk) => {
+          if (!clStripped) {
+            clBuf = Buffer.concat([clBuf, chunk])
+            const headAscii = clBuf.slice(0, 12).toString('ascii')
+            if (/^(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH) /.test(headAscii)) {
+              const idx = clBuf.indexOf('\r\n\r\n')
+              if (idx === -1) {
+                if (clBuf.length > 16384) { clStripped = true; clBuf = Buffer.alloc(0) }
+                return
+              }
+              clBuf = clBuf.slice(idx + 4)
+              clStripped = true
+              if (clBuf.length > 0) upstream.write(clBuf)
+              clBuf = Buffer.alloc(0)
+              return
+            }
+            clStripped = true
+            upstream.write(clBuf)
+            clBuf = Buffer.alloc(0)
+            return
+          }
+          upstream.write(chunk)
+        })
+        // Server direction: pass through
+        upstream.on('data', (chunk) => {
+          socket.write(chunk)
+        })
       })
       upstream.on('error', () => { try { socket.destroy() } catch (_err) { /* destroyed */ } })
     })
