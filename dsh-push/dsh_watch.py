@@ -127,16 +127,24 @@ class DshWatch:
         return out
 
     def _is_subagent(self, path):
-        """Read the first log line to decide whether this is a subagent session (origin=subagent)."""
+        """Scan the first 128 KB of the log for origin=subagent (not just the first line).
+
+        A brand-new subagent file whose first line is not yet written would be
+        misjudged as a main session and its turn/end events pushed as "done".
+        """
         try:
             with open(path, "rb") as f:
-                chunk = self._dctx.stream_reader(f).read(65536)
+                chunk = self._dctx.stream_reader(f).read(131072)
             for line in chunk.decode("utf-8", "ignore").splitlines():
                 line = line.strip()
                 if not line:
                     continue
-                ev = json.loads(line)
-                return ev.get("origin") == "subagent"
+                try:
+                    ev = json.loads(line)
+                except Exception:
+                    continue
+                if ev.get("origin") == "subagent":
+                    return True
         except Exception:
             return False
         return False
@@ -207,7 +215,10 @@ class DshWatch:
                 trace.waiting_kind = ""
         elif t == "turn/end":
             trace.running = False
-            if not fresh:
+            # Only a genuinely completed turn counts as "done": aborted, error,
+            # or cancelled turns must not be pushed.
+            reason = (data.get("reason") or {}).get("kind")
+            if reason == "completed" and not fresh:
                 emit(dict(type=EVENT_TURN_DONE, session=trace.sid,
                           title=trace.title))
 
@@ -236,6 +247,13 @@ class DshWatch:
             if not changed and trace.processed_lines > 0:
                 continue
             trace.mtime, trace.size = st.st_mtime, st.st_size
+            # Re-check subagent status on every change: a brand-new subagent
+            # file misjudged as a main session gets filtered once its first
+            # lines land.
+            if changed and not trace.subagent:
+                trace.subagent = self._is_subagent(trace.path)
+                if trace.subagent:
+                    continue
             evs = self._read_events(trace.path)
             if evs is None:
                 continue
