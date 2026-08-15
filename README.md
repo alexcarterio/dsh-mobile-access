@@ -1,8 +1,14 @@
-# dsh-lan-gate
+# dsh-mobile-access
 
-LAN gate plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with device approval, rate limiting, mobile layout, phone notifications, and PWA support.
+Everything you need to use DeepSeek Harness (DSH) from your phone: a secure LAN
+gate plugin with device approval, a mobile-friendly layout, phone push
+notifications, and PWA installation assets.
 
-A self-contained, dependency-free Cordis plugin (`lan-gate.mjs`) that exposes your local DSH web UI to trusted LAN / Tailscale devices through a device-approved, token-bound reverse proxy — plus an optional `dsh-push` helper that forwards DSH session events to your phone over [ntfy](https://github.com/binwiederhier/ntfy).
+The core is a self-contained, dependency-free Cordis plugin (`lan-gate.mjs`)
+that exposes your local DSH web UI to trusted LAN / Tailscale devices through a
+device-approved, token-bound reverse proxy — plus an optional `dsh-push` helper
+that forwards DSH session events to your phone over
+[ntfy](https://github.com/binwiederhier/ntfy).
 
 ## Features
 
@@ -11,7 +17,7 @@ A self-contained, dependency-free Cordis plugin (`lan-gate.mjs`) that exposes yo
 - **Token + cookie binding** — one approval issues a 128-bit random token that is claimed once and bound to a single browser via an `HttpOnly`/`SameSite=Lax` cookie. Revoking a device drops its access immediately.
 - **Rate limiting** — per-IP sliding-window limit (default 3000 requests/minute, raised from the upstream 120), returning `429` on overflow to blunt scanners and brute-force attempts.
 - **Mobile layout** — compact phone CSS, full-screen dialogs, non-obscuring model/context menus, iOS focus-zoom prevention, and a `crypto.randomUUID` polyfill for non-HTTPS intranet contexts.
-- **Attachment upload** — `POST /lan-gate/upload` accepts files up to 20 MB, saved under `$DSH_HOME/uploads/` with a 7-day automatic cleanup.
+- **Attachment upload** — `POST /lan-gate/upload` accepts files up to 20 MB, saved under `$DSH_HOME/uploads/` with a 7-day automatic cleanup. A companion script [`tools/parse_file.py`](tools/parse_file.py) converts common attachment formats (txt/docx/pdf/zip/7z/rar) to readable text.
 - **Phone gallery / camera buttons** — injected floating buttons that reuse the desktop paste path (or fall back to inserting an `<img>`).
 - **Admin panel** — an in-app panel under **Settings → LAN Access** to view status, approve/deny devices, switch access modes, revoke devices, and copy access URLs.
 - **ntfy phone push (`dsh-push`)** — a standalone watcher that sends a high-priority notification when DSH is waiting for your approval or a reply, and a normal notification when a task turn finishes.
@@ -74,6 +80,27 @@ http://<lan-ip>:3088
 ```
 
 where `<lan-ip>` is this machine's LAN IP. The device shows a "waiting for approval" page until you approve it in **Settings → LAN Access**.
+
+### 5. Parse uploaded attachments (optional)
+
+`tools/parse_file.py` converts a downloaded attachment into readable text (or
+extracts an archive):
+
+```text
+py tools/parse_file.py <file> [output]
+```
+
+- Without `[output]`, it writes `<file>.parsed.txt` and prints the first 500
+  characters to stdout.
+- Supported: `txt`/`md`/`csv`/`json`/`xml`/`yaml`/`log` and common code files
+  (read as text), `docx`, `pdf`, and archives `zip`/`7z`/`rar` (extracted to a
+  same-named directory; `rar` needs WinRAR/unrar installed).
+
+Install its optional dependencies once:
+
+```text
+pip install python-docx pypdf py7zr rarfile
+```
 
 ## Configuration
 
@@ -154,14 +181,6 @@ pip install requests zstandard
 
 Subscribe your phone by opening `https://ntfy.sh/<your-ntfy-topic>` in the ntfy app.
 
-## Upstream & Credits
-
-- **Based on [hchao3335-maker/dsh-lan-gate](https://github.com/hchao3335-maker/dsh-lan-gate)** (MIT). This release preserves the upstream MIT license and adds: rate limit 120 → 3000, attachment upload endpoint, 7-day upload cleanup, phone gallery/camera buttons, and menu layout adjustments. See [`NOTICE`](NOTICE).
-- **[Leon0555/dsh-lan-access](https://github.com/Leon0555/dsh-lan-access)** — a similar solution, reviewed as research reference.
-- **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** — the host platform.
-- **[Tailscale](https://github.com/tailscale/tailscale)** — the mesh VPN used for secure remote access.
-- **[ntfy](https://github.com/binwiederhier/ntfy)** — the push-notification service used by `dsh-push`.
-
 ## Limitations
 
 - **No end-to-end HTTPS** — the app layer is plain HTTP inside the WireGuard tunnel; the tunnel itself is the encryption boundary.
@@ -172,4 +191,22 @@ Subscribe your phone by opening `https://ntfy.sh/<your-ntfy-topic>` in the ntfy 
 
 ## License
 
-[MIT](LICENSE). Based on upstream [hchao3335-maker/dsh-lan-gate](https://github.com/hchao3335-maker/dsh-lan-gate) (MIT); see [NOTICE](NOTICE).
+[MIT](LICENSE).
+
+## Credits & References
+
+This project builds on the work of the following projects:
+
+- **hchao3335-maker/dsh-lan-gate** — the `lan-gate.mjs` plugin is derived from
+  [hchao3335-maker/dsh-lan-gate](https://github.com/hchao3335-maker/dsh-lan-gate)
+  (MIT). This release preserves the upstream MIT license and adds: rate limit
+  120 → 3000, attachment upload endpoint, 7-day upload cleanup, phone
+  gallery/camera buttons, and menu layout adjustments. See [`NOTICE`](NOTICE).
+- **[Leon0555/dsh-lan-access](https://github.com/Leon0555/dsh-lan-access)** — a
+  similar solution, reviewed as research reference.
+- **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** — the
+  host platform.
+- **[Tailscale](https://github.com/tailscale/tailscale)** — the mesh VPN used
+  for secure remote access.
+- **[ntfy](https://github.com/binwiederhier/ntfy)** — the push-notification
+  service used by `dsh-push`.
