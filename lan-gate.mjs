@@ -435,7 +435,7 @@ const PANEL_JS = '<scr' + 'ipt>'
   + 'if(approved.length){'
   + 'h+=\'<div class="lg-label">Approved devices (set an access mode per device)</div>\';'
   + 'for(var a=0;a<approved.length;a++){var d=approved[a];var dk=d.kind||\'auto\';'
-  + 'h+=\'<div class="lg-item"><div class="lg-ip">\'+esc(d.ip)+\' · \'+(KIND[dk]||\'Auto\')+\'</div><div class="lg-muted lg-small">\'+fmt(d.at)+\'</div><div class="lg-row">\'+kindBtns(dk,\'set-kind\',d.ip)+\'</div><div class="lg-row"><button class="lg-btn" data-act="revoke" data-ip="\'+esc(d.ip)+\'">Revoke</button></div></div>\'}'
+  + 'h+=\'<div class="lg-item"><div class="lg-ip">\'+esc(d.ip)+\' · \'+(KIND[dk]||\'Auto\')+(d.expired?\' <span class="lg-muted" style="color:#f0716f">(expired)</span>\':\'\')+\'</div><div class="lg-muted lg-small">\'+fmt(d.at)+(d.expired?\' · Expired — this device must be allowed again\':\'\')+\'</div><div class="lg-row">\'+kindBtns(dk,\'set-kind\',d.ip)+\'</div><div class="lg-row"><button class="lg-btn" data-act="revoke" data-ip="\'+esc(d.ip)+\'">Revoke</button></div></div>\'}'
   + 'h+=\'<div class="lg-row"><button class="lg-btn lg-btn-danger" data-act="revoke-all">Revoke all</button></div>\'}'
   + 'if(denied.length){'
   + 'h+=\'<div class="lg-label">Denied devices</div>\';'
@@ -653,7 +653,7 @@ export function apply(ctx) {
     for (const ip of Object.keys(decisions)) {
       const d = decisions[ip]
       if (d.revoked === true) continue
-      if (d.allow === true) approved.push({ ip: ip, at: d.at, kind: d.kind || 'auto' })
+      if (d.allow === true) approved.push({ ip: ip, at: d.at, kind: d.kind || 'auto', expired: !isAllowed(decisions, ip) })
       else if (d.allow === false) denied.push({ ip: ip, at: d.at })
     }
     for (const ip of Object.keys(seen)) {

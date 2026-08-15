@@ -136,7 +136,8 @@ it as a background process.
 | Symptom | Cause / fix |
 |---|---|
 | Phone stuck on "waiting for approval" | Approve the device in **Settings → LAN Access** on the desktop |
-| "Token bound to another browser" | The token was claimed by another browser; revoke the device, then approve again |
+| Access page loops back to itself after a cookie wipe | A browser on the same IP automatically re-claims the token; if it keeps failing, revoke the device and approve it again |
+| Approval no longer works after a long time | Approvals expire after 90 days; allow the device again in **Settings → LAN Access** |
 | 429 "Too many requests" | Per-IP rate limit hit; wait a minute |
 | No "Install app" in Chrome | Use the HTTPS (Tailscale Serve) address; refresh once so the manifest loads |
 | PWA changes gone after DSH upgrade | DSH rebuilds its frontend `dist`; re-apply [`pwa-setup.md`](../pwa/pwa-setup.md) |
