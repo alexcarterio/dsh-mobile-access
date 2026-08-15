@@ -1,0 +1,20 @@
+# NOTICE
+
+This project is based on and derived from
+[hchao3335-maker/dsh-lan-gate](https://github.com/hchao3335-maker/dsh-lan-gate),
+released under the MIT License.
+
+## Modifications / enhancements
+
+On top of the upstream `lan-gate.mjs`, this release adds:
+
+- Per-IP rate limit raised from 120 to 3000 requests per minute.
+- Attachment upload endpoint (`POST /lan-gate/upload`) with a 20 MB per-file cap.
+- Automatic 7-day cleanup of uploaded files.
+- Phone gallery / camera image picker buttons in the web UI.
+- Settings menu layout adjustments (the LAN Access admin panel).
+
+## Original copyright
+
+The original MIT license and copyright notice from the upstream project are
+preserved. See the upstream repository for the original authors and license text.

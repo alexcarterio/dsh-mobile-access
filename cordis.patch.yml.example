@@ -1,0 +1,24 @@
+# cordis.patch.yml.example
+#
+# Example DSH user patch for registering the lan-gate plugin. DSH applies user
+# patches from $DSH_HOME/profiles/<profile>/cordis.patch.yml after every bundle
+# layer; a plain `- insert:` block whose row carries a `file:///` name registers
+# a local Cordis plugin file.
+#
+# How to use:
+#   1. Copy lan-gate.mjs to $DSH_HOME/lan-gate/lan-gate.mjs
+#      (the default $DSH_HOME is ~/.dsh).
+#   2. Merge the block below into ~/.dsh/profiles/web/cordis.patch.yml
+#      (or copy this whole file there if the profile has no user patch yet).
+#   3. Adjust the file:/// path to your real, absolute lan-gate.mjs location.
+#   4. Restart DSH (or re-run `dsh --profile web`).
+#
+# Path notes:
+#   - Windows:     file:///C:/Users/<you>/.dsh/lan-gate/lan-gate.mjs
+#   - macOS/Linux: file:///home/<you>/.dsh/lan-gate/lan-gate.mjs
+#   The path must be absolute. Percent-encode spaces, e.g.
+#   file:///C:/Users/My%20Name/.dsh/lan-gate/lan-gate.mjs
+
+- insert:
+    - id: lan-gate
+      name: 'file:///C:/Users/<you>/.dsh/lan-gate/lan-gate.mjs'
