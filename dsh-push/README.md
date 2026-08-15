@@ -4,12 +4,8 @@ Forward DeepSeek Harness (DSH) session events to your phone via
 [ntfy](https://ntfy.sh): a high-priority notification when DSH is waiting for
 your approval or a reply, and a normal notification when a work turn finishes.
 
-This watcher was originally part of the
-[deepseek-whale-pet](https://github.com/alexcarterio/deepseek-whale-pet)
-desktop pet project and is now maintained here, next to the rest of the phone
-access kit. The pet repository remains the canonical home of the shared
-`dsh_watch.py` session monitor; the copy in this directory is a mirror — changes
-to `dsh_watch.py` should be made in the pet repository and mirrored here.
+This directory is the home of the phone push watcher for the dsh-mobile-access
+kit. It is fully self-contained: everything it needs lives in this repository.
 
 ## Privacy
 

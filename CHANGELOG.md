@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Fully decouple from the desktop pet repository: remove all cross-repository
+  references from `dsh-push` docs and code headers. This repository is
+  self-contained.
+
 ## [1.0.4] - 2026-08-15
 
 ### Changed

@@ -161,12 +161,9 @@ With the HTTPS address open in Chrome, use **⋮ → Install app / Add to Home s
 
 ### 5. Phone notifications (ntfy)
 
-`dsh-push` forwards DSH events to your phone via ntfy. It originated in the
-[deepseek-whale-pet](https://github.com/alexcarterio/deepseek-whale-pet) desktop
-pet project and is maintained here from now on. See
-[`dsh-push/README.md`](dsh-push/README.md) for the full guide, privacy notes, and
-the relationship to the pet repository (which stays the canonical home of the
-shared `dsh_watch.py`).
+`dsh-push` forwards DSH events to your phone via ntfy. See
+[`dsh-push/README.md`](dsh-push/README.md) for the full guide, privacy notes,
+and configuration.
 
 | Environment variable | Description |
 |---|---|
