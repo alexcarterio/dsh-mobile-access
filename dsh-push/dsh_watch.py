@@ -67,7 +67,7 @@ class SessionTrace:
     """Event-folding state for one session."""
     __slots__ = ("sid", "running", "pending", "waiting", "waiting_kind",
                  "processed_lines", "title", "mtime", "size", "path",
-                 "subagent")
+                 "subagent", "pending_done")
 
     def __init__(self):
         self.sid = ""
@@ -81,6 +81,7 @@ class SessionTrace:
         self.size = -1
         self.path = ""
         self.subagent = False     # subagent session: do not push notifications
+        self.pending_done = False # main session ended while its subagents still run: hold the done push
 
 
 class DshWatch:
@@ -119,10 +120,10 @@ class DshWatch:
                     trace = SessionTrace()
                     trace.path = path
                     self._traces[sid] = trace
-                    # subagent sessions are not pushed (main sessions only)
+                    # subagent sessions are not pushed (main sessions only), but
+                    # their running state is still tracked: a main-session "done"
+                    # push waits until dispatched subagents have all finished.
                     trace.subagent = self._is_subagent(path)
-                if trace.subagent:
-                    continue
                 out[sid] = trace
         return out
 
@@ -218,9 +219,19 @@ class DshWatch:
             # Only a genuinely completed turn counts as "done": aborted, error,
             # or cancelled turns must not be pushed.
             reason = (data.get("reason") or {}).get("kind")
-            if reason == "completed" and not fresh:
-                emit(dict(type=EVENT_TURN_DONE, session=trace.sid,
-                          title=trace.title))
+            if reason == "completed" and not fresh and not trace.subagent:
+                # Main session done: if dispatched subagents still run, hold the
+                # push and fire it once they have all finished (avoid "done" for
+                # a turn that merely handed work off to subagents).
+                if self._any_subagent_running():
+                    trace.pending_done = True
+                else:
+                    emit(dict(type=EVENT_TURN_DONE, session=trace.sid,
+                              title=trace.title))
+
+    def _any_subagent_running(self):
+        """Whether any subagent session is still running."""
+        return any(tr.subagent and tr.running for tr in self._traces.values())
 
     # ---------- polling ----------
     def poll(self):
@@ -252,15 +263,29 @@ class DshWatch:
             # lines land.
             if changed and not trace.subagent:
                 trace.subagent = self._is_subagent(trace.path)
-                if trace.subagent:
-                    continue
             evs = self._read_events(trace.path)
             if evs is None:
                 continue
             # file rewritten (line count went backwards) -> reset baseline
             if trace.processed_lines > len(evs):
                 trace.processed_lines = 0
-            self._fold(trace, evs, emit)
+            if trace.subagent:
+                # subagents only fold state (running tracking), never emit
+                self._fold(trace, evs, lambda _ev: None)
+            else:
+                self._fold(trace, evs, emit)
+
+        # Fire held done pushes once no subagent is running any more
+        if not self._any_subagent_running():
+            for sid, tr in self._traces.items():
+                if tr.pending_done:
+                    tr.pending_done = False
+                    ev = dict(type=EVENT_TURN_DONE, session=sid, title=tr.title)
+                    emitted.append(ev)
+                    try:
+                        self.on_event(ev)
+                    except Exception:
+                        pass
 
         for ev in emitted:
             try:
